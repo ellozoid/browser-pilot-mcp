@@ -26,6 +26,7 @@ interface BrowseRequest {
   maxSteps?: number;
   expectation?: BrowseExpectation;
   stopAtChallenge?: boolean;
+  inputs?: Record<string, string>;
 }
 
 interface RunOutcome {
@@ -131,7 +132,7 @@ function runCli(args: string[], signal: AbortSignal): Promise<RunOutcome> {
     };
 
     child.on("error", (cause: Error) => {
-      reject(new Error(`jev_browse could not start node: ${cause.message}`));
+      reject(new Error(`browser_run could not start node: ${cause.message}`));
     });
 
     child.on("close", (code: number | null) => {
@@ -149,19 +150,19 @@ function runCli(args: string[], signal: AbortSignal): Promise<RunOutcome> {
 function failureMessage(outcome: RunOutcome): string {
   const tail = outcome.stderr.trim().split("\n").slice(-3).join("\n");
 
-  if (outcome.code === null) return `jev_browse was stopped${tail ? `: ${tail}` : ""}`;
+  if (outcome.code === null) return `browser_run was stopped${tail ? `: ${tail}` : ""}`;
 
   const detail = outcome.stdout.trim() || tail;
 
-  return `jev_browse exited with code ${outcome.code}${detail ? `: ${detail}` : ""}`;
+  return `browser_run exited with code ${outcome.code}${detail ? `: ${detail}` : ""}`;
 }
 
 function decodeRequest(value: JsonValue): BrowseRequest {
-  if (!isObject(value)) throw new Error("jev_browse requires { goal: string, url: string }");
+  if (!isObject(value)) throw new Error("browser_run requires { goal: string, url: string }");
 
-  const { goal, url, engine, max_steps, expect, stop_at_challenge } = value;
+  const { goal, url, engine, max_steps, expect, stop_at_challenge, inputs } = value;
 
-  if (!isString(goal) || !isString(url)) throw new Error("jev_browse requires { goal: string, url: string }");
+  if (!isString(goal) || !isString(url)) throw new Error("browser_run requires { goal: string, url: string }");
 
   const request: BrowseRequest = {
     goal,
@@ -175,18 +176,23 @@ function decodeRequest(value: JsonValue): BrowseRequest {
 
   if (stop_at_challenge === true) request.stopAtChallenge = true;
 
+  if (inputs !== undefined) {
+    if (!isObject(inputs) || !Object.values(inputs).every(isString)) throw new Error("inputs must be an object of string values");
+    request.inputs = inputs as Record<string, string>;
+  }
+
   return request;
 }
 
 const plugin: HostPlugin = {
-  id: "jev-browse",
+  id: "browser-pilot-mcp",
   async setup(ctx: Host) {
     await ctx.tool.transform((editor) => {
       editor.add({
-        name: "jev_browse",
+        name: "browser_run",
         description:
-          "Drive a real browser autonomously toward a goal. TypeSafe Jev picks each operation and target " +
-          "from the live page; a small helper model writes text for fields. Returns the final status, URL, " +
+          "Drive a real browser autonomously toward a goal. A configured decision model picks each operation and target " +
+          "from structured page state. Returns the final status, URL, " +
           "and action history. Prefer this over step-by-step browsing when a task is a bounded web goal " +
           "(search, filter, navigate, fill a form). The agent stops itself when done or blocked. There is " +
           "no purchase/credential guardrail — scope goals accordingly and verify the outcome independently; " +
@@ -230,6 +236,11 @@ const plugin: HostPlugin = {
               type: "number",
               description: "Action budget, default 60.",
             },
+            inputs: {
+              type: "object",
+              additionalProperties: { type: "string" },
+              description: "Known values keyed by field label or name.",
+            },
           },
           required: ["goal", "url"],
           additionalProperties: false,
@@ -244,6 +255,8 @@ const plugin: HostPlugin = {
           if (request.expectation !== undefined) args.push("--expect", JSON.stringify(request.expectation));
 
           if (request.stopAtChallenge === true) args.push("--stop-at-challenge");
+
+          if (request.inputs !== undefined) args.push("--inputs", JSON.stringify(request.inputs));
 
           const outcome = await runCli(args, context.signal);
 

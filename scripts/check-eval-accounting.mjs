@@ -18,6 +18,7 @@ try {
   for (const [label, error, infrastructure] of [
     ["execution", "Dropdown execution was not confirmed; inspect before retrying.", 0],
     ["credentials", "OPENROUTER_API_KEY is not set. Get a key at provider", 1],
+    ["decision-config", "BROWSER_PILOT_DECISION_PROVIDER is not set and no unambiguous legacy provider can be inferred.", 1],
   ]) {
     writeFileSync(join(root, "bundled/cli.mjs"), `console.log(${JSON.stringify(JSON.stringify({ status: "error", error, steps: 0, history: [] }))});`);
     const run = spawnSync(process.execPath, [join(root, "scripts/eval.mjs"), "--label", label], { encoding: "utf8" });

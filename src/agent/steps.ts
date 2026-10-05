@@ -3,7 +3,8 @@ import { trace, tracing } from "../trace.ts";
 import type { Agent } from "../agent.ts";
 import { choose } from "../model/decide.ts";
 import { actionSpace } from "../model/space.ts";
-import { fieldContext, fieldText } from "../model/text.ts";
+import { fieldContext } from "../model/text.ts";
+import { deterministicFieldValue } from "../text/inputs.ts";
 import { StalePage, type HistoryEntry, type PageState } from "../types.ts";
 import { sleep } from "../sleep.ts";
 import { blockedProbe } from "./consults.ts";
@@ -113,7 +114,7 @@ export async function decideStep(a: Agent): Promise<void> {
 
     const page = live;
 
-    a.decision = await choose(a.client, page, goal, a.history, a.progressObservations);
+    a.decision = await choose(a.decisionProvider, page, goal, a.history, a.progressObservations);
     a.decisions.push(a.decision);
     reportDecision(a, page, Boolean(repair));
     a.lastOperation = a.decision.operation;
@@ -237,6 +238,7 @@ export async function actStep(a: Agent): Promise<void> {
 
     let text: string | null = null;
     let helper: { model: string; latency_ms: number; usage?: unknown } | null = null;
+    let textSource: "input" | "provider" | undefined;
 
     if (action.kind === "fill") {
       if (!(await a.browser.fresh(page, undefined, "page"))) {
@@ -244,15 +246,22 @@ export async function actStep(a: Agent): Promise<void> {
       }
 
       const context = fieldContext(a.goal, action, page, a.history, a.progressObservations);
+      const provided = deterministicFieldValue(action, page, a.inputs);
 
-      if (a.pendingText && JSON.stringify(a.pendingText[0]) === JSON.stringify(context)) {
+      if (provided) {
+        text = provided.value;
+        textSource = "input";
+        helper = { model: `input:${provided.key}`, latency_ms: 0 };
+        a.textCalls.push({ model: "provided-input", field: action.label, source: "input", redacted: true });
+      } else if (a.pendingText && JSON.stringify(a.pendingText[0]) === JSON.stringify(context)) {
         [, text, helper] = a.pendingText;
+        textSource = "provider";
       } else {
         let generated;
 
         for (let attempt = 0; ; attempt++) {
           try {
-            generated = await fieldText(context);
+            generated = await a.textProvider.generateFieldValue(context);
             break;
           } catch (error) {
             if (!String(error).includes("no valid field value") || attempt >= 2) throw error;
@@ -261,6 +270,7 @@ export async function actStep(a: Agent): Promise<void> {
 
         text = generated.text;
         helper = generated.helper;
+        textSource = "provider";
 
         if (text === null) {
           a.textCalls.push({ ...helper, field: action.label, value: null });
@@ -306,6 +316,8 @@ export async function actStep(a: Agent): Promise<void> {
       text,
       text_helper: helper?.model ?? null,
       text_latency_ms: helper?.latency_ms ?? 0,
+      text_source: textSource,
+      text_sensitive: textSource === "input" ? true : undefined,
       operation: decision.operation,
       target: decision.target,
       follow_up: decision.follow_up,

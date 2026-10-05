@@ -17,7 +17,7 @@ export function answerReviewContext(goal: string, answer: string | null, current
 }
 
 export async function prepareAnswer(agent: Agent): Promise<AnswerResult> {
-  if (!(await requiresAnswer(agent.client, agent.goal))) return { status: "not_requested" };
+  if (!(await requiresAnswer(agent.decisionProvider, agent.goal))) return { status: "not_requested" };
   let feedback: string | undefined;
 
   for (let attempt = 0; attempt < 2; attempt++) {

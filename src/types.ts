@@ -1,4 +1,5 @@
 import type { GoalAssessment } from "./agent/progress.ts";
+import type { RunErrorKind } from "./errors.ts";
 
 export type JsonValue =
   | string
@@ -134,6 +135,8 @@ export interface HistoryEntry {
   text: string | null;
   text_helper: string | null;
   text_latency_ms: number;
+  text_source?: "input" | "provider";
+  text_sensitive?: boolean;
   operation: string;
   target: string | null;
   page_changed: boolean | null;
@@ -161,6 +164,7 @@ export interface RunResult {
   answer?: string;
   downloads?: string[];
   error?: string;
+  error_kind?: RunErrorKind;
   blocked_cause?: string;
   final_state?: string;
   answer_note?: string;

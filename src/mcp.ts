@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { parseExpectation } from "./completion.ts";
 import { runOnce } from "./cli.ts";
 import { loadDotEnv } from "./env.ts";
-import { isFiniteNumber, isString } from "./json.ts";
+import { isFiniteNumber, isJsonObject, isString } from "./json.ts";
 import type { JsonObject, JsonValue } from "./types.ts";
 
 interface JsonRpcRequest {
@@ -34,14 +34,14 @@ const PKG_VERSION = (() => {
   }
 })();
 
-const ALLOWED_ARGS = new Set(["goal", "url", "engine", "max_steps", "expect", "stop_at_challenge"]);
+const ALLOWED_ARGS = new Set(["goal", "url", "engine", "max_steps", "expect", "stop_at_challenge", "inputs", "include_history"]);
 
 const TOOL = {
-  name: "jev_browse",
+  name: "browser_run",
   description:
-    "Drive a real browser autonomously toward a goal. TypeSafe Jev picks each operation and target " +
-    "from the live page; a small helper model writes text for fields. Returns the final status, URL, " +
-    "and action history. Prefer this over step-by-step browsing when a task is a bounded web goal " +
+    "Drive a real browser autonomously toward a bounded goal. A configured decision model selects " +
+    "browser operations and targets from structured page state, while Browser Pilot executes and " +
+    "verifies them. Prefer this over step-by-step browsing for a self-contained web task " +
     "(search, filter, navigate, fill a form). The agent stops itself when done or blocked. There is " +
     "no purchase/credential guardrail — scope goals accordingly and verify the outcome independently; " +
     "the agent's DONE claim is not proof.",
@@ -74,6 +74,15 @@ const TOOL = {
       stop_at_challenge: {
         type: "boolean",
         description: "Stop as blocked when visible verification is detected, without interacting with it.",
+      },
+      inputs: {
+        type: "object",
+        description: "Caller-supplied field values. Unambiguous label/name matches bypass the text model.",
+        additionalProperties: { type: "string" },
+      },
+      include_history: {
+        type: "boolean",
+        description: "Include full action history and final page evidence instead of the compact default result.",
       },
       max_steps: {
         type: "number",
@@ -109,17 +118,29 @@ function enqueue<T>(fn: () => Promise<T>): Promise<T> {
   return next;
 }
 
-async function callJevBrowse(id: JsonValue, args: JsonObject): Promise<void> {
+function decodeInputs(value: JsonValue): Record<string, string> | undefined {
+  if (value === undefined) return undefined;
+
+  if (!isJsonObject(value)) throw new Error("inputs must be an object of string values");
+
+  const entries = Object.entries(value);
+
+  if (!entries.every(([key, input]) => Boolean(key.trim()) && isString(input))) throw new Error("inputs must be an object of string values");
+
+  return Object.fromEntries(entries) as Record<string, string>;
+}
+
+async function callBrowserRun(id: JsonValue, args: JsonObject): Promise<void> {
   const unknown = Object.keys(args).filter((k) => !ALLOWED_ARGS.has(k));
 
   if (unknown.length) {
-    respondError(id, -32602, `jev_browse: unknown arguments: ${unknown.join(", ")}`);
+    respondError(id, -32602, `browser_run: unknown arguments: ${unknown.join(", ")}`);
 
     return;
   }
 
   if (!isString(args.goal) || !isString(args.url)) {
-    respondError(id, -32602, "jev_browse requires { goal: string, url: string }");
+    respondError(id, -32602, "browser_run requires { goal: string, url: string }");
 
     return;
   }
@@ -131,20 +152,33 @@ async function callJevBrowse(id: JsonValue, args: JsonObject): Promise<void> {
         goals: [args.goal],
         engine: args.engine === "agent-browser" ? "agent-browser" : "cdp",
         headed: false,
-        cdpUrl: process.env.JEV_CDP_URL,
+        cdpUrl: process.env.BROWSER_PILOT_CDP_URL ?? process.env.JEV_CDP_URL,
         maxSteps: isFiniteNumber(args.max_steps) ? args.max_steps : undefined,
         expectation: args.expect === undefined ? undefined : parseExpectation(args.expect),
         stopAtChallenge: args.stop_at_challenge === true ? true : undefined,
+        inputs: decodeInputs(args.inputs),
       },
       (event) =>
         process.stderr.write(JSON.stringify({ call: id, ...event }) + "\n"),
     );
 
-    toolResult(id, JSON.stringify(result), result.status === "error");
+    const output = args.include_history === true ? result : {
+      status: result.status,
+      final_url: result.final_url,
+      steps: result.steps,
+      decisions: result.decisions,
+      elapsed_ms: result.elapsed_ms,
+      blocked_cause: result.blocked_cause ?? null,
+      answer: result.answer ?? null,
+      error: result.error ?? null,
+      error_kind: result.error_kind ?? null,
+    };
+
+    toolResult(id, JSON.stringify(output), result.status === "error");
   } catch (error) {
     toolResult(
       id,
-      `jev_browse failed before completing: ${error instanceof Error ? error.message : error}`,
+      `browser_run failed before completing: ${error instanceof Error ? error.message : error}`,
       true,
     );
   }
@@ -158,7 +192,7 @@ async function handle(request: JsonRpcRequest): Promise<void> {
       respond(id, {
         protocolVersion: PROTOCOL_VERSION,
         capabilities: { tools: {} },
-        serverInfo: { name: "jev-browse", version: PKG_VERSION },
+        serverInfo: { name: "browser-pilot", version: PKG_VERSION },
       });
 
       return;
@@ -174,13 +208,13 @@ async function handle(request: JsonRpcRequest): Promise<void> {
 
       return;
     case "tools/call": {
-      if (params?.name !== "jev_browse") {
+      if (params?.name !== "browser_run" && params?.name !== "jev_browse") {
         respondError(id, -32602, `Unknown tool: ${params?.name}`);
 
         return;
       }
 
-      await enqueue(() => callJevBrowse(id, params?.arguments ?? {}));
+      await enqueue(() => callBrowserRun(id, params?.arguments ?? {}));
 
       return;
     }

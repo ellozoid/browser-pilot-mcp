@@ -1,7 +1,7 @@
 {
-  "name": "jev-browse",
-  "version": "0.16.0",
-  "description": "Jev drives a real browser: one goal, an indexed action space, one systemOne decision per step.",
+  "name": "browser-pilot-mcp",
+  "version": "0.17.0",
+  "description": "Provider-neutral autonomous browser agent for MCP and CLI clients.",
   "type": "module",
   "keywords": [
     "pi-package"
@@ -15,6 +15,8 @@
     ]
   },
   "bin": {
+    "browser-pilot": "bundled/cli.mjs",
+    "browser-pilot-mcp": "bundled/mcp.mjs",
     "jev-browse": "bundled/cli.mjs",
     "jev-browse-mcp": "bundled/mcp.mjs"
   },
@@ -30,7 +32,8 @@
     "eval:all": "node scripts/eval.mjs --file tasks.json && node scripts/eval.mjs --file tasks-hard.json && node scripts/eval.mjs --file tasks-harder.json && node scripts/eval.mjs --file tasks-hardest.json",
     "lint": "oxlint && npm run check:comments",
     "run": "tsx src/cli.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test test/**/*.test.ts"
   },
   "engines": {
     "node": ">=22"

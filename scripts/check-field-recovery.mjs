@@ -36,9 +36,9 @@ for (const [engine, Driver] of [["cdp", CdpBrowser], ["agent-browser", AgentBrow
       await withTrace(join(out, `${engine}-${variant.name}.jsonl`), async () => {
         const url = new URL("../evals/fixtures/field-recovery.html", import.meta.url).href + variant.query;
         agent = await Agent.start({ url, goal: "Verify this inspection using the code from its sealed report.", open: target => Driver.open(target), maxSteps: 10 });
-        const original = agent.client.systemOne.bind(agent.client);
+        const original = agent.decisionProvider.decide.bind(agent.decisionProvider);
 
-        agent.client.systemOne = async request => {
+        agent.decisionProvider.decide = async request => {
           const response = await original(request);
           const target = Object.entries(request.questions.type_text_target?.criteria ?? {}).find(([, value]) => value.element?.endsWith("] Inspection code"));
 

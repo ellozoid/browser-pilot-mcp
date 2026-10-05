@@ -1,11 +1,11 @@
 {
-  "name": "jev-browse",
+  "name": "browser-pilot-mcp",
   "interface": {
-    "displayName": "jev-browse"
+    "displayName": "Browser Pilot MCP"
   },
   "plugins": [
     {
-      "name": "jev-browse",
+      "name": "browser-pilot-mcp",
       "source": {
         "source": "local",
         "path": "./"

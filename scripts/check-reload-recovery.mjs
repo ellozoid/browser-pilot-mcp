@@ -29,9 +29,9 @@ for (const [engine, Driver] of [["cdp", CdpBrowser], ["agent-browser", AgentBrow
   try {
     await withTrace(join(out, `${engine}.jsonl`), async () => {
       agent = await Agent.start({ url: new URL("../evals/fixtures/reload-loop.html", import.meta.url).href, goal: "Open the station report and report only North station's sensor count.", open: url => Driver.open(url), maxSteps: 10 });
-      const original = agent.client.systemOne.bind(agent.client);
+      const original = agent.decisionProvider.decide.bind(agent.decisionProvider);
 
-      agent.client.systemOne = async request => {
+      agent.decisionProvider.decide = async request => {
         const response = await original(request);
         const target = Object.entries(request.questions.click_target?.criteria ?? {}).find(([, value]) => value.element?.endsWith("] Station report"));
 

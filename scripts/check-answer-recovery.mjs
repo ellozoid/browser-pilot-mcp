@@ -28,8 +28,8 @@ const choice = (question, selected) => ({ choice: selected, confidence: 1, proba
 try {
   await withTrace(join(out, "trace.jsonl"), async () => {
     agent = await Agent.start({ url: new URL("../evals/fixtures/answer-recovery.html", import.meta.url).href, goal: "Summarize both stations' sensor counts and the maintenance window.", open: url => CdpBrowser.open(url), maxSteps: 8 });
-    const original = agent.client.systemOne.bind(agent.client);
-    agent.client.systemOne = async request => {
+    const original = agent.decisionProvider.decide.bind(agent.decisionProvider);
+    agent.decisionProvider.decide = async request => {
       const key = ["goal_progress", "completion"].find(key => request.questions[key] && !injected.has(key));
 
       if (!key) return original(request);

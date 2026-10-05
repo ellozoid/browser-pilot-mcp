@@ -3,13 +3,14 @@ import { requiresAnswer } from "../src/model/answer-scope.ts";
 import assert from "node:assert/strict";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { makeClient } from "../src/env.ts";
+import { readBrowserPilotConfig } from "../src/env.ts";
+import { createDecisionProvider } from "../src/decision/registry.ts";
 import { answerReviewContext } from "../src/agent/answer.ts";
 import { reviewAnswer } from "../src/model/answer-review.ts";
 
 process.env.JEV_PROVIDER = "openrouter";
 
-const client = makeClient();
+const provider = createDecisionProvider(readBrowserPilotConfig().decision);
 
 const out = resolve("evals/results", `answer-calibration-${Date.now()}`);
 
@@ -54,7 +55,7 @@ for (const mode of ["reasoning-review"]) {
     const current = { url: "https://example.com", title: "Observed result", text: test.text, text_scope: OBSERVED_TEXT_SCOPE, viewport: { top: 0, height: 800, document_height: 800 }, excerpt_truncated: false, control_state_truncated: false, omitted_available_actions: 0, tables: test.tables ?? [], omitted_tables: 0, control_state: "", available_actions: [], frames: [], downloads: [], dialog: null, pending_nav: false, pending_requests: 0, challenge: false, challenge_reasons: [] };
     const context = answerReviewContext(test.goal, test.answer, current, []);
 
-    const required = await requiresAnswer(client, test.goal);
+    const required = await requiresAnswer(provider, test.goal);
     const response = required ? await reviewAnswer(context) : { verdict: "NOT_REQUESTED", reason: "No information requested" };
     const actual = response.verdict;
     results.push({ mode, id: test.id, expected: test.expected, actual, pass: actual === test.expected, context, response });

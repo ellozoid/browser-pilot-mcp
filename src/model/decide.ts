@@ -3,48 +3,12 @@ import { clockContext } from "./clock.ts";
 import { compactObservations, observationViewport, OBSERVED_TEXT_SCOPE, OUTCOME_CRITERIA, type ProgressObservation } from "../agent/progress.ts";
 import { trace } from "../trace.ts";
 
-import type { TypeSafeClient, Questions, ChoiceCriteria } from "@typesafe-ai/sdk";
-
-import { isFiniteNumber, isString } from "../json.ts";
+import type { DecisionCriteria, DecisionProvider, DecisionQuestions } from "../decision/types.ts";
+import { validateChoice } from "../decision/validate.ts";
+import { isString } from "../json.ts";
 import { NEXT_ACTION, TARGET } from "../questions.ts";
-import type { HistoryEntry, JsonValue, ObservedAction, PageState } from "../types.ts";
+import type { HistoryEntry, ObservedAction, PageState } from "../types.ts";
 import { actionSpace } from "./space.ts";
-
-interface RawChoiceAnswer {
-  choice?: JsonValue;
-  confidence?: JsonValue;
-  probabilities?: Record<string, JsonValue>;
-}
-
-export function validateChoice(answer: RawChoiceAnswer, ids: Set<string>): asserts answer is {
-  choice: string;
-  confidence: number;
-  probabilities: Record<string, number>;
-} {
-  const probabilities = answer?.probabilities;
-  const choice = answer?.choice;
-  const values = Object.values(probabilities ?? {});
-
-  const sum = values.reduce((a: number, b) => a + (isFiniteNumber(b) ? b : NaN), 0);
-  const chosen = isString(choice) && probabilities !== undefined ? probabilities[choice] : undefined;
-
-  const valid =
-    isString(choice) &&
-    ids.has(choice) &&
-    probabilities !== undefined &&
-    Object.keys(probabilities).length === ids.size &&
-    Object.keys(probabilities).every((k) => ids.has(k)) &&
-    [...values, answer?.confidence].every(
-      (n) => isFiniteNumber(n) && n >= 0 && n <= 1,
-    ) &&
-    Math.abs(sum - 1) < 0.02 &&
-    isFiniteNumber(chosen) &&
-    chosen >= Math.max(...values.map(Number)) - 1e-6;
-
-  if (!valid) {
-    throw new Error("Invalid TypeSafe response; no action executed.");
-  }
-}
 
 export interface Decision {
   choice: string;
@@ -66,7 +30,7 @@ export interface Decision {
 }
 
 export async function choose(
-  client: TypeSafeClient,
+  provider: DecisionProvider,
   state: PageState,
   goal: string,
   history: HistoryEntry[],
@@ -78,13 +42,13 @@ export async function choose(
 
   for (let i = 0; i < 2; i++) {
     try {
-      const decision = await chooseOnce(client, candidateState, goal, history, i === 0 ? observations : observations.slice(-2));
+      const decision = await chooseOnce(provider, candidateState, goal, history, i === 0 ? observations : observations.slice(-2));
 
       return { ...decision, latency_ms: Math.round(performance.now() - started) };
     } catch (error) {
       const msg = String(error);
 
-      if (msg.includes("Invalid TypeSafe response") && !invalidRetried) {
+      if (msg.includes("Invalid decision response") && !invalidRetried) {
         invalidRetried = true;
         i--;
         continue;
@@ -92,7 +56,7 @@ export async function choose(
 
       if (/max_tokens|context|too (large|long|many)/i.test(msg) && i === 0) {
         trace("decision_context_fallback", { error: msg, actions: state.actions.length });
-        candidateState = { ...state, text: state.text.slice(0, 2000), actions: await shortlistActions(client, state, goal, history) };
+        candidateState = { ...state, text: state.text.slice(0, 2000), actions: await shortlistActions(provider, state, goal, history) };
         continue;
       }
 
@@ -104,7 +68,7 @@ export async function choose(
 }
 
 async function chooseOnce(
-  client: TypeSafeClient,
+  provider: DecisionProvider,
   state: PageState,
   goal: string,
   history: HistoryEntry[],
@@ -157,7 +121,7 @@ async function chooseOnce(
     ["HOVER", "Hover over an element to reveal menus, tooltips, or hover-only controls."],
   ]);
 
-  const operations: ChoiceCriteria = {};
+  const operations: DecisionCriteria = {};
 
   for (const key of Object.keys(targets)) {
     const label = labels.get(key);
@@ -169,7 +133,7 @@ async function chooseOnce(
   operations.DONE = "Every requirement is visibly satisfied.";
   operations.BLOCKED = "No supported operation can progress.";
 
-  const questions: Questions = {
+  const questions: DecisionQuestions = {
     goal_progress: {
       type: "choice",
       criteria: OUTCOME_CRITERIA,
@@ -182,8 +146,8 @@ async function chooseOnce(
     },
   };
 
-  const criteriaFor = (candidates: Record<string, ObservedAction>): ChoiceCriteria => {
-    const criteria: ChoiceCriteria = {};
+  const criteriaFor = (candidates: Record<string, ObservedAction>): DecisionCriteria => {
+    const criteria: DecisionCriteria = {};
 
     for (const [index, a] of Object.entries(candidates)) {
       criteria[index] = {
@@ -235,7 +199,7 @@ async function chooseOnce(
     };
   }
 
-  const followUps: ChoiceCriteria = {
+  const followUps: DecisionCriteria = {
     NONE: "The next step can't be predicted confidently.",
     CLICK_MATCH_TYPED:
       "After typing, the next step is clicking the suggestion or result whose label contains the typed text.",
@@ -289,10 +253,10 @@ async function chooseOnce(
   };
 
   trace("model_request", request);
-  const result = await client.systemOne(request);
+  const result = await provider.decide(request);
   trace("model_response", result);
 
-  const answers = result.answers as Record<string, RawChoiceAnswer>;
+  const answers = result.answers;
   const progressAnswer = answers.goal_progress ?? {};
   validateChoice(progressAnswer, new Set(Object.keys(OUTCOME_CRITERIA)));
   const operationAnswer = answers.operation ?? {};
@@ -337,6 +301,7 @@ async function chooseOnce(
 
   const followUp =
     followUpAnswer &&
+    followUpAnswer.type === "choice" &&
     isString(followUpAnswer.choice) &&
     followUpAnswer.choice in followUps
       ? followUpAnswer.choice

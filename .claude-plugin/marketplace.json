@@ -1,21 +1,21 @@
 {
-  "name": "jev-browse",
+  "name": "browser-pilot-mcp",
   "owner": {
     "name": "0x7067"
   },
   "metadata": {
-    "description": "TypeSafe Jev drives a real browser toward one goal",
-    "version": "0.13.2"
+    "description": "Autonomous browser tasks with pluggable decision models",
+    "version": "0.17.0"
   },
   "plugins": [
     {
-      "name": "jev-browse",
+      "name": "browser-pilot-mcp",
       "source": "./",
-      "description": "Jev drives a real browser: one goal, an indexed action space, one TypeSafe systemOne decision per step. Exposes the jev_browse MCP tool.",
-      "version": "0.13.2",
+      "description": "Browser Pilot MCP runs bounded browser tasks with a configurable decision provider.",
+      "version": "0.17.0",
       "license": "MIT",
-      "homepage": "https://github.com/0x7067/jev-browse",
-      "repository": "https://github.com/0x7067/jev-browse",
+      "homepage": "https://github.com/ellozoid/browser-pilot-mcp",
+      "repository": "https://github.com/ellozoid/browser-pilot-mcp",
       "keywords": ["browser", "automation", "typesafe", "jev", "agent"],
       "category": "Productivity",
       "policy": {

@@ -7,7 +7,12 @@ import { resolveFollowUp } from "./agent/followup.ts";
 import { giveUpHint } from "./agent/fuses.ts";
 import { settleFirstObservation, stateSummary } from "./agent/observe.ts";
 import { actStep, decideStep, observeStep, settleStep } from "./agent/steps.ts";
-import { makeClient } from "./env.ts";
+import { readBrowserPilotConfig } from "./env.ts";
+import { createDecisionProvider } from "./decision/registry.ts";
+import type { DecisionProvider } from "./decision/types.ts";
+import { OpenAiCompatibleTextProvider, type TextProvider } from "./text/provider.ts";
+import type { DeterministicInputs } from "./text/inputs.ts";
+import { classifyRunError, type RunErrorKind } from "./errors.ts";
 import { type Decision } from "./model/decide.ts";
 import { warmModelEndpoints } from "./model/endpoints.ts";
 import { actionSpace } from "./model/space.ts";
@@ -32,6 +37,9 @@ export interface AgentOptions {
   maxSteps?: number;
   expectation?: CompletionExpectation;
   stopAtChallenge?: boolean;
+  decisionProvider?: DecisionProvider;
+  textProvider?: TextProvider;
+  inputs?: DeterministicInputs;
 }
 
 type Phase = "observe" | "decide" | "act" | "settle" | "done" | "blocked" | "error";
@@ -76,11 +84,14 @@ export class Agent {
   lastOperation: string | null = null;
   phase: Phase = "observe";
   terminalError: string | null = null;
+  terminalErrorKind: RunErrorKind | null = null;
   preparedAnswer: Extract<AnswerResult, { status: "supported" | "not_requested" }> | null = null;
   answerNote: string | undefined;
   startedAt = 0;
   maxSteps: number;
-  client = makeClient();
+  readonly decisionProvider: DecisionProvider;
+  readonly textProvider: TextProvider;
+  readonly inputs: DeterministicInputs;
   private openDriver: (url: string) => Promise<BrowserDriver>;
   private startUrl: string;
 
@@ -94,11 +105,15 @@ export class Agent {
     this.startUrl = opts.url;
     this.openDriver = opts.open;
     this.maxSteps = opts.maxSteps ?? MAX_STEPS;
+    this.decisionProvider = opts.decisionProvider ?? createDecisionProvider(readBrowserPilotConfig().decision);
+    this.textProvider = opts.textProvider ?? new OpenAiCompatibleTextProvider();
+    this.inputs = opts.inputs ?? {};
   }
 
   static async start(opts: AgentOptions): Promise<Agent> {
     const agent = new Agent(opts);
-    warmModelEndpoints(agent.client.baseURL);
+
+    if (agent.decisionProvider.endpoint) warmModelEndpoints(agent.decisionProvider.endpoint);
     agent.browser = await agent.openDriver(opts.url);
 
     try {
@@ -276,6 +291,7 @@ export class Agent {
           });
         } else {
           this.terminalError = error instanceof Error ? error.message : String(error);
+          this.terminalErrorKind = classifyRunError(error instanceof Error ? error : String(error));
           this.phase = "error";
           trace("agent_error", { error: this.terminalError, after_step: this.history.length });
         }
@@ -339,6 +355,9 @@ export class Agent {
     else if (answerNote) result.answer_note = answerNote;
 
     if (this.terminalError) result.error = this.terminalError;
+
+    if (this.terminalErrorKind) result.error_kind = this.terminalErrorKind;
+    else if (result.status === "blocked") result.error_kind = this.blockedCause === "completion_unverified" ? "verification_failed" : "blocked";
 
     if (this.blockedCause) result.blocked_cause = this.blockedCause;
 

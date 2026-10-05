@@ -14,11 +14,14 @@ import { AgentBrowser } from "./abrowser.ts";
 import { loadDotEnv } from "./env.ts";
 import { sleep } from "./sleep.ts";
 import type { BrowserDriver, JsonValue } from "./types.ts";
+import { isJsonObject, isString } from "./json.ts";
+import type { DeterministicInputs } from "./text/inputs.ts";
+import { classifyRunError } from "./errors.ts";
 
 const lockDir = (profileDir: string) => {
   const key = createHash("sha1").update(profileDir).digest("hex").slice(0, 12);
 
-  return join(homedir(), ".jev-browse", `run-${key}.lock`);
+  return join(homedir(), ".browser-pilot", `run-${key}.lock`);
 };
 
 function pidAlive(pid: number): boolean {
@@ -53,7 +56,7 @@ async function acquireLock(profileDir: string, timeoutMs = 30_000): Promise<void
       }
 
       if (Date.now() > deadline) {
-        throw new Error(`Another jev-browse run (pid ${holder}) holds the browser profile`);
+        throw new Error(`Another browser-pilot run (pid ${holder}) holds the browser profile`);
       }
 
       await sleep(1000);
@@ -85,6 +88,18 @@ export interface CliArgs {
   traceFile?: string;
   expectation?: CompletionExpectation;
   stopAtChallenge?: boolean;
+  inputs?: DeterministicInputs;
+}
+
+function parseInputs(value: JsonValue): DeterministicInputs {
+  if (!isJsonObject(value)) throw new Error("--inputs requires a JSON object of string values");
+  const entries = Object.entries(value);
+
+  if (!entries.every(([key, input]) => Boolean(key.trim()) && isString(input))) {
+    throw new Error("--inputs requires a JSON object of string values");
+  }
+
+  return Object.fromEntries(entries) as DeterministicInputs;
 }
 
 function parseArgs(argv: string[]): CliArgs {
@@ -104,6 +119,9 @@ function parseArgs(argv: string[]): CliArgs {
     switch (arg) {
       case "--stop-at-challenge":
         args.stopAtChallenge = true;
+        break;
+      case "--inputs":
+        args.inputs = parseInputs(JSON.parse(next() ?? "null"));
         break;
       case "--expect":
         args.expectation = parseExpectation(JSON.parse(next() ?? "null"));
@@ -139,7 +157,7 @@ function parseArgs(argv: string[]): CliArgs {
 
   if (!args.url || !args.goals.length || !["cdp", "agent-browser"].includes(args.engine)) {
     throw new Error(
-      "Usage: jev-browse --url URL --goal GOAL [--goal ...] [--engine cdp|agent-browser] [--headed] [--cdp http://host:9222] [--max-steps N] [--allow-file-urls] [--trace FILE] [--expect JSON] [--stop-at-challenge]",
+      "Usage: browser-pilot --url URL --goal GOAL [--goal ...] [--engine cdp|agent-browser] [--headed] [--cdp http://host:9222] [--max-steps N] [--inputs JSON] [--allow-file-urls] [--trace FILE] [--expect JSON] [--stop-at-challenge]",
     );
   }
 
@@ -163,20 +181,20 @@ export async function runAgent(
   } = {},
 ): Promise<RunResult> {
   const protocol = new URL(args.url!).protocol;
-  const allowFile = args.allowFileUrls || process.env.JEV_ALLOW_FILE_URLS === "1";
+  const allowFile = args.allowFileUrls || process.env.BROWSER_PILOT_ALLOW_FILE_URLS === "1" || process.env.JEV_ALLOW_FILE_URLS === "1";
 
   if (
     protocol !== "http:" &&
     protocol !== "https:" &&
     !(protocol === "file:" && allowFile)
   ) {
-    throw new Error(`jev-browse only drives http(s) pages; got ${args.url}`);
+    throw new Error(`browser-pilot only drives http(s) pages; got ${args.url}`);
   }
 
   const profileDir =
     args.engine === "agent-browser"
-      ? (process.env.JEV_AB_PROFILE ?? join(homedir(), ".jev-browse", "agent-browser-profile"))
-      : (process.env.JEV_PROFILE ?? join(homedir(), ".jev-browse", "profile"));
+      ? (process.env.BROWSER_PILOT_AGENT_BROWSER_PROFILE ?? process.env.JEV_AB_PROFILE ?? join(homedir(), ".browser-pilot", "agent-browser-profile"))
+      : (process.env.BROWSER_PILOT_PROFILE ?? process.env.JEV_PROFILE ?? join(homedir(), ".browser-pilot", "profile"));
 
   await acquireLock(profileDir);
   let agent: Agent;
@@ -189,6 +207,7 @@ export async function runAgent(
       maxSteps: args.maxSteps,
       expectation: args.expectation,
       stopAtChallenge: args.stopAtChallenge,
+      inputs: args.inputs,
     });
   } catch (error) {
     releaseLock();
@@ -249,7 +268,7 @@ export async function runOnce(
   process.once("SIGTERM", onSigterm);
   process.once("SIGINT", onSigint);
 
-  const result = withTrace(args.traceFile ?? process.env.JEV_TRACE_FILE, () => {
+  const result = withTrace(args.traceFile ?? process.env.BROWSER_PILOT_TRACE_FILE ?? process.env.JEV_TRACE_FILE, () => {
     trace("run_config", args);
 
     return runAgent(args, { onEvent: event => {
@@ -289,6 +308,7 @@ async function main(): Promise<void> {
       elapsed_ms: 0,
       history: [],
       error: error instanceof Error ? error.message : String(error),
+      error_kind: classifyRunError(error instanceof Error ? error : String(error)),
     };
 
     process.stdout.write(JSON.stringify(result) + "\n");

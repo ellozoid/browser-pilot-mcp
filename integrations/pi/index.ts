@@ -7,17 +7,17 @@ import { runAgent } from "../../bundled/cli.mjs";
 
 export default function (pi: ExtensionAPI) {
   pi.registerTool({
-    name: "jev_browse",
-    label: "Jev Browse",
+    name: "browser_run",
+    label: "Browser Pilot",
     description:
-      "Drive a real browser autonomously toward one goal. TypeSafe Jev picks each operation " +
-      "and target from the live page (a helper LLM writes field text for TYPE_TEXT). Returns " +
+      "Drive a real browser autonomously toward one goal. A configured decision model picks each operation " +
+      "and target from structured page state. Returns " +
       "final status, URL, and the action history. Prefer this over step-by-step agent_browser " +
       "use for bounded web goals — search, filter, navigate, fill a form.",
-    promptSnippet: "Drive a browser toward a bounded goal with Jev as the decision model",
+    promptSnippet: "Drive a browser autonomously toward a bounded, verifiable goal",
     promptGuidelines: [
-      "Use jev_browse for self-contained web tasks with a clear done condition; keep step-by-step agent_browser for exploratory or interactive work.",
-      "Give jev_browse a starting url on the target site — the driver navigates in-page and cannot reach the address bar.",
+      "Use browser_run for self-contained web tasks with a clear done condition; keep step-by-step tools for exploratory work.",
+      "Give browser_run a starting URL and deterministic completion evidence when possible.",
     ],
     parameters: Type.Object({
       goal: Type.String({ description: "One natural-language goal with an explicit stop condition." }),
@@ -28,6 +28,7 @@ export default function (pi: ExtensionAPI) {
         }),
       ),
       max_steps: Type.Optional(Type.Number({ description: "Action budget, default 60." })),
+      inputs: Type.Optional(Type.Record(Type.String(), Type.String(), { description: "Known values keyed by field label or name." })),
     }),
     async execute(_toolCallId, params, signal, onUpdate) {
       const result = await runAgent(
@@ -37,6 +38,7 @@ export default function (pi: ExtensionAPI) {
           engine: params.engine ?? "cdp",
           headed: false,
           maxSteps: params.max_steps,
+          inputs: params.inputs,
         },
         {
           signal,
@@ -54,7 +56,7 @@ export default function (pi: ExtensionAPI) {
       );
 
       if (result.status === "error") {
-        throw new Error(result.error ?? "jev-browse run failed");
+        throw new Error(result.error ?? "browser-pilot run failed");
       }
 
       return {

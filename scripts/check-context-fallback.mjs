@@ -26,9 +26,9 @@ let injected = false;
 try {
   await withTrace(join(out, "trace.jsonl"), async () => {
     agent = await Agent.start({ url: new URL("../evals/fixtures/large-controls.html", import.meta.url).href, goal: "Export the quarterly report and stop when export is confirmed.", open: url => CdpBrowser.open(url), maxSteps: 8 });
-    const original = agent.client.systemOne.bind(agent.client);
+    const original = agent.decisionProvider.decide.bind(agent.decisionProvider);
 
-    agent.client.systemOne = async request => {
+    agent.decisionProvider.decide = async request => {
       if (!injected && request.questions.operation) {
         injected = true;
         throw new Error("Request exceeds context limit");

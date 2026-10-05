@@ -31,7 +31,7 @@
   <!-- lightning bolt -->
   <path d="M 872 62 L 818 168 L 856 168 L 826 238 L 926 130 L 884 130 Z" fill="url(#bolt)"/>
   <!-- title -->
-  <text x="960" y="152" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="56" font-weight="700" fill="#eef3ff" text-anchor="middle">jev-browse</text>
+  <text x="960" y="152" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="56" font-weight="700" fill="#eef3ff" text-anchor="middle">Browser Pilot MCP</text>
   <text x="960" y="196" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="19" fill="#7ea2ff" text-anchor="middle">one goal → indexed actions → one request per step</text>
-  <text x="960" y="232" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15" fill="#5f7196" text-anchor="middle">TypeScript · TypeSafe Jev · CDP</text>
+  <text x="960" y="232" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15" fill="#5f7196" text-anchor="middle">TypeScript · pluggable decision models · CDP</text>
 </svg>

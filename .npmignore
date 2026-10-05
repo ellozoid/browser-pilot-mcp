@@ -1,0 +1,8 @@
+.env
+dist/
+node_modules/
+evals/results/
+.claude/worktrees/
+.opencode/
+.pi/
+.entire/

@@ -98,7 +98,7 @@ function pageHtml(state, goal) {
     .time { margin-left: auto; font: 500 19px "SF Mono", Menlo, monospace; color: #c9ccd6; }
   </style></head><body>
     <div class="hole"></div>
-    <header><span class="brand">jev-browse</span><span class="goal">${escapeHtml(goal)}</span></header>
+    <header><span class="brand">Browser Pilot</span><span class="goal">${escapeHtml(goal)}</span></header>
     <footer>${footerHtml(state)}</footer>
   </body></html>`;
 }

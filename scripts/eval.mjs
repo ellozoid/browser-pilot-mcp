@@ -294,7 +294,7 @@ async function main() {
   mkdirSync(RESULTS_DIR, { recursive: true });
 
   const isInfra = (r) =>
-    r.status === "error" && /TypeSafe API credits|(?:OPENROUTER_API_KEY|TYPESAFE_API_KEY|TEXT_MODEL_API_KEY) is not set/.test(r.error ?? "");
+    r.status === "error" && /TypeSafe API credits|(?:OPENROUTER_API_KEY|TYPESAFE_API_KEY|TEXT_MODEL_API_KEY) is not set|BROWSER_PILOT_DECISION_PROVIDER is not set|is required for decision provider|Decision provider .+ returned HTTP (?:401|403|429)/.test(r.error ?? "");
 
   for (const task of tasks) {
     const runs = [];

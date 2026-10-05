@@ -1,11 +1,11 @@
-import type { TypeSafeClient } from "@typesafe-ai/sdk";
+import type { DecisionProvider } from "../decision/types.ts";
 import type { HistoryEntry, ObservedAction, PageState } from "../types.ts";
 import { choiceRequest } from "./choice-request.ts";
 import { clockContext } from "./clock.ts";
 import { trace } from "../trace.ts";
 
 export async function shortlistActions(
-  client: TypeSafeClient,
+  provider: DecisionProvider,
   state: PageState,
   goal: string,
   history: HistoryEntry[],
@@ -46,7 +46,7 @@ export async function shortlistActions(
     };
 
     trace("shortlist_request", request);
-    const result = await choiceRequest(client, request, "shortlist");
+    const result = await choiceRequest(provider, request, "shortlist");
     const action = batch.find(action => action.id === result.answers.candidate.choice);
 
     if (!action) throw new Error("Shortlist selected an unknown action");

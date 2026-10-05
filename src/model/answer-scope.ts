@@ -1,8 +1,8 @@
-import type { TypeSafeClient } from "@typesafe-ai/sdk";
+import type { DecisionProvider } from "../decision/types.ts";
 import { choiceRequest } from "./choice-request.ts";
 
-export async function requiresAnswer(client: TypeSafeClient, goal: string): Promise<boolean> {
-  const response = await choiceRequest(client, {
+export async function requiresAnswer(provider: DecisionProvider, goal: string): Promise<boolean> {
+  const response = await choiceRequest(provider, {
     state: { user_goal: goal },
     questions: {
       answer_required: {

@@ -84,7 +84,7 @@ export async function spawnChrome(opts: CdpOptions): Promise<Spawned | null> {
   const port = await freePort();
 
   const profileDir =
-    opts.profileDir ?? process.env.JEV_PROFILE ?? join(homedir(), ".jev-browse", "profile");
+    opts.profileDir ?? process.env.BROWSER_PILOT_PROFILE ?? process.env.JEV_PROFILE ?? join(homedir(), ".browser-pilot", "profile");
 
   const args = [
     `--remote-debugging-port=${port}`,
@@ -101,12 +101,12 @@ export async function spawnChrome(opts: CdpOptions): Promise<Spawned | null> {
   if (process.getuid?.() === 0) {
     args.push("--no-sandbox");
     process.stderr.write(
-      "jev-browse: running as root — Chrome launched with --no-sandbox, " +
-        "renderer containment is off. Attach to a non-root Chrome via JEV_CDP_URL to keep it.\n",
+      "browser-pilot: running as root — Chrome launched with --no-sandbox, " +
+      "renderer containment is off. Attach to a non-root Chrome via BROWSER_PILOT_CDP_URL to keep it.\n",
     );
   }
 
-  for (const extra of splitShellWords(process.env.JEV_CHROME_ARGS ?? "")) {
+  for (const extra of splitShellWords(process.env.BROWSER_PILOT_CHROME_ARGS ?? process.env.JEV_CHROME_ARGS ?? "")) {
     args.push(extra);
   }
 

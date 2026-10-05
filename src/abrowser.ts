@@ -70,8 +70,8 @@ export class AgentBrowser implements BrowserDriver {
   private listenerInit = createListenerInit();
 
   private constructor(opts: AgentBrowserOptions) {
-    this.bin = opts.bin ?? process.env.JEV_AGENT_BROWSER_BIN ?? "agent-browser";
-    this.session = opts.session ?? `jev-${process.pid}-${Math.floor(Math.random() * 1e6)}`;
+    this.bin = opts.bin ?? process.env.BROWSER_PILOT_AGENT_BROWSER_BIN ?? process.env.JEV_AGENT_BROWSER_BIN ?? "agent-browser";
+    this.session = opts.session ?? `browser-pilot-${process.pid}-${Math.floor(Math.random() * 1e6)}`;
     this.launchArgs = opts.launchArgs ?? [];
   }
 
@@ -79,7 +79,7 @@ export class AgentBrowser implements BrowserDriver {
     const browser = new AgentBrowser(opts);
 
     const profile =
-      process.env.JEV_AB_PROFILE ?? join(homedir(), ".jev-browse", "agent-browser-profile");
+      process.env.BROWSER_PILOT_AGENT_BROWSER_PROFILE ?? process.env.JEV_AB_PROFILE ?? join(homedir(), ".browser-pilot", "agent-browser-profile");
 
     try {
       await browser.run(["--profile", profile, "--init-script", browser.listenerInit.path, ...browser.launchArgs, "open"]);

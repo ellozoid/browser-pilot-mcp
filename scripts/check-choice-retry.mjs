@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { once } from "node:events";
-import { TypeSafeClient } from "@typesafe-ai/sdk";
+import { TypeSafeDecisionProvider } from "../src/decision/providers/typesafe.ts";
 import { choiceRequest } from "../src/model/choice-request.ts";
 
 let calls = 0;
@@ -24,18 +24,18 @@ const address = server.address();
 
 assert(address && Object.hasOwn(address, "port"));
 
-const client = new TypeSafeClient({ apiKey: "fixture-only", baseURL: `http://127.0.0.1:${address.port}` });
+const provider = new TypeSafeDecisionProvider({ id: "typesafe", apiKey: "fixture-only", baseUrl: `http://127.0.0.1:${address.port}`, model: "fixture" });
 
 const request = { state: "fixture", questions: { result: { type: "choice", criteria: { YES: "yes", NO: "no" } } } };
 
 try {
-  const result = await choiceRequest(client, request, "check");
+  const result = await choiceRequest(provider, request, "check");
   assert.equal(calls, 2);
   assert.equal(result.answers.result.choice, "YES");
   assert.equal(result.answers.result.probabilities.YES, 1);
   alwaysInvalid = true;
   calls = 0;
-  await assert.rejects(() => choiceRequest(client, request, "check"), /Invalid TypeSafe response/);
+  await assert.rejects(() => choiceRequest(provider, request, "check"), /invalid response/);
   assert.equal(calls, 2);
   console.log("choice-retry: corrected response accepted; persistent inconsistency rejected after two calls");
 } finally {

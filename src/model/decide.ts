@@ -168,6 +168,8 @@ async function chooseOnce(
     if (operation === "DOUBLE_CLICK") continue;
     const pool = operation === "DRAG" ? dragDestinations : candidates;
 
+    if (Object.keys(pool).length < 2) continue;
+
     questions[`${operation.toLowerCase()}_target`] = {
       type: "choice",
       criteria: criteriaFor(pool),
@@ -175,28 +177,32 @@ async function chooseOnce(
     };
   }
 
-  if (questions.drag_target && targets.DRAG) {
-    questions.drag_target.instructions = {
-      goal,
-      operation: "DRAG",
-      rules: [
-        NEXT_ACTION,
-        "Choose the element to drag ONTO — the destination, drop zone, or slot the goal names. Never the element being moved.",
-      ],
-    };
-
-    questions.drag_source = {
-      type: "choice",
-      criteria: criteriaFor(targets.DRAG),
-      instructions: {
+  if (targets.DRAG) {
+    if (questions.drag_target) {
+      questions.drag_target.instructions = {
         goal,
         operation: "DRAG",
         rules: [
           NEXT_ACTION,
-          "Choose the element to drag FROM — the card, file, or handle that moves.",
+          "Choose the element to drag ONTO — the destination, drop zone, or slot the goal names. Never the element being moved.",
         ],
-      },
-    };
+      };
+    }
+
+    if (Object.keys(targets.DRAG).length > 1) {
+      questions.drag_source = {
+        type: "choice",
+        criteria: criteriaFor(targets.DRAG),
+        instructions: {
+          goal,
+          operation: "DRAG",
+          rules: [
+            NEXT_ACTION,
+            "Choose the element to drag FROM — the card, file, or handle that moves.",
+          ],
+        },
+      };
+    }
   }
 
   const followUps: DecisionCriteria = {
@@ -273,17 +279,26 @@ async function chooseOnce(
 
   if (operation in targets) {
     const pool = operation === "DRAG" ? dragDestinations : targets[operation];
+    const targetKeys = Object.keys(pool);
 
-    const answer = answers[`${operation === "DOUBLE_CLICK" ? "click" : operation.toLowerCase()}_target`] ?? {};
-    validateChoice(answer, new Set(Object.keys(pool)));
+    const answer = targetKeys.length === 1
+      ? { type: "choice" as const, choice: targetKeys[0], confidence: 1, probabilities: { [targetKeys[0]]: 1 } }
+      : answers[`${operation === "DOUBLE_CLICK" ? "click" : operation.toLowerCase()}_target`] ?? {};
+
+    validateChoice(answer, new Set(targetKeys));
     target = answer.choice;
     targetProbabilities = answer.probabilities;
     targetConfidence = answer.confidence;
     choice = pool[target].id;
 
     if (operation === "DRAG") {
-      const sourceAnswer = answers.drag_source ?? {};
-      validateChoice(sourceAnswer, new Set(Object.keys(targets.DRAG)));
+      const sourceKeys = Object.keys(targets.DRAG);
+
+      const sourceAnswer = sourceKeys.length === 1
+        ? { type: "choice" as const, choice: sourceKeys[0], confidence: 1, probabilities: { [sourceKeys[0]]: 1 } }
+        : answers.drag_source ?? {};
+
+      validateChoice(sourceAnswer, new Set(sourceKeys));
       target2 = choice;
       target = sourceAnswer.choice;
       choice = targets.DRAG[target].id;

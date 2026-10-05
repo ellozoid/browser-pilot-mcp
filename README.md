@@ -80,12 +80,13 @@ The server exposes one primary tool, `browser_run`:
     "url_match": "/settings",
     "text_match": "Settings"
   },
+  "headed": true,
   "max_steps": 30,
   "stop_at_challenge": true
 }
 ```
 
-The default MCP response is compact: status, final URL, step/decision counts, elapsed time, blocked cause, answer, error, and normalized `error_kind`. Set `include_history: true` for the full run result and terminal evidence.
+The default MCP response is compact: status, final URL, step/decision counts, elapsed time, blocked cause, answer, error, and normalized `error_kind`. Set `include_history: true` for the full run result and terminal evidence. Set `headed: true` to watch the browser window for one call, or set `BROWSER_PILOT_HEADED=1` on the MCP server to make visible runs the default. An explicit `headed` value overrides the environment default.
 
 ## CLI usage
 
@@ -99,7 +100,7 @@ browser-pilot \
   --stop-at-challenge
 ```
 
-Use `--engine cdp` by default or `--engine agent-browser`. `--headed`, `--cdp URL`, `--trace FILE`, and `--allow-file-urls` retain their existing behavior. JSON results go to stdout and step events go to stderr. Legacy `jev-browse` and `jev-browse-mcp` binary aliases remain temporarily available.
+Use `--engine cdp` by default or `--engine agent-browser`. `--headed` shows the browser, while `--headless` overrides `BROWSER_PILOT_HEADED=1` for one CLI run. `--cdp URL`, `--trace FILE`, and `--allow-file-urls` retain their existing behavior. JSON results go to stdout and step events go to stderr. Legacy `jev-browse` and `jev-browse-mcp` binary aliases remain temporarily available.
 
 ## Decision providers
 
@@ -207,6 +208,7 @@ This is useful for login, navigation, filters, search, forms, multi-step flows, 
 | `CLOUDFLARE_API_TOKEN` | Workers AI bearer token |
 | `TEXT_MODEL`, `TEXT_MODEL_BASE_URL`, `TEXT_MODEL_API_KEY` | Free-form text provider |
 | `BROWSER_PILOT_CDP_URL` | Existing Chrome DevTools endpoint |
+| `BROWSER_PILOT_HEADED=1` | Show browser windows by default; per-call `headed` overrides it |
 | `BROWSER_PILOT_PROFILE` | CDP Chrome profile directory |
 | `BROWSER_PILOT_AGENT_BROWSER_PROFILE` | agent-browser profile directory |
 | `BROWSER_PILOT_AGENT_BROWSER_BIN` | agent-browser executable |

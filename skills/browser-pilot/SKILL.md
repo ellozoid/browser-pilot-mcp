@@ -25,6 +25,7 @@ Prefer this over controlling each click from the host model. Use step-by-step br
 - `inputs`: known field values keyed by labels or names; unique matches bypass text generation.
 - `expect`: deterministic terminal evidence. Every supplied pattern must match.
 - `engine`: `cdp` or `agent-browser`.
+- `headed`: show the browser window while the task runs.
 - `max_steps`: action budget.
 - `stop_at_challenge`: stop before interacting with visible verification.
 - `include_history`: opt into the full result for debugging.

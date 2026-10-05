@@ -343,6 +343,10 @@ export class CdpBrowser implements BrowserDriver {
     } catch {
     }
 
+    if (this.proc) {
+      await this.socket?.call("Browser.close").catch(() => {});
+    }
+
     this.socket?.close();
 
     if (this.proc) {

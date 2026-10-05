@@ -40,6 +40,7 @@ const decisionEnvironment = {
   OPENROUTER_API_KEY: undefined,
   CLOUDFLARE_ACCOUNT_ID: undefined,
   CLOUDFLARE_API_TOKEN: undefined,
+  BROWSER_PILOT_HEADED: undefined,
 } satisfies EnvironmentPatch;
 
 test("new decision settings take precedence over legacy settings", async () => {
@@ -67,6 +68,17 @@ test("legacy TypeSafe configuration normalizes deterministically", async () => {
     assert.equal(config.decision.provider, "typesafe");
     assert.equal(config.decision.model, "jev-latest");
     assert.equal(config.decision.apiKey, "legacy-key");
+  });
+});
+
+test("headed browser mode is normalized from the environment", async () => {
+  await withEnvironment({
+    ...decisionEnvironment,
+    BROWSER_PILOT_DECISION_PROVIDER: "ollama",
+    BROWSER_PILOT_DECISION_MODEL: "clef-flash",
+    BROWSER_PILOT_HEADED: "1",
+  }, () => {
+    assert.equal(readBrowserPilotConfig().browser.headed, true);
   });
 });
 

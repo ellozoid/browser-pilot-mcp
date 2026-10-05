@@ -61,6 +61,9 @@ import { createHash } from "node:crypto";
 function isJsonObject(value) {
   return value !== null && value !== void 0 && !Array.isArray(value) && value === Object(value);
 }
+function isBoolean(value) {
+  return value === true || value === false;
+}
 var isString = (value) => typeof value === "string";
 var isFiniteNumber = (value) => Number.isFinite(value);
 var canonicalize = (value) => Array.isArray(value) ? value.map(canonicalize) : isJsonObject(value) ? Object.fromEntries(
@@ -1154,33 +1157,38 @@ async function chooseOnce(provider, state, goal, history, observations = []) {
   for (const [operation2, candidates] of Object.entries(targets)) {
     if (operation2 === "DOUBLE_CLICK") continue;
     const pool = operation2 === "DRAG" ? dragDestinations : candidates;
+    if (Object.keys(pool).length < 2) continue;
     questions[`${operation2.toLowerCase()}_target`] = {
       type: "choice",
       criteria: criteriaFor(pool),
       instructions: { goal, operation: operation2 === "CLICK" ? "CLICK or DOUBLE_CLICK" : operation2, rules: [NEXT_ACTION, TARGET] }
     };
   }
-  if (questions.drag_target && targets.DRAG) {
-    questions.drag_target.instructions = {
-      goal,
-      operation: "DRAG",
-      rules: [
-        NEXT_ACTION,
-        "Choose the element to drag ONTO \u2014 the destination, drop zone, or slot the goal names. Never the element being moved."
-      ]
-    };
-    questions.drag_source = {
-      type: "choice",
-      criteria: criteriaFor(targets.DRAG),
-      instructions: {
+  if (targets.DRAG) {
+    if (questions.drag_target) {
+      questions.drag_target.instructions = {
         goal,
         operation: "DRAG",
         rules: [
           NEXT_ACTION,
-          "Choose the element to drag FROM \u2014 the card, file, or handle that moves."
+          "Choose the element to drag ONTO \u2014 the destination, drop zone, or slot the goal names. Never the element being moved."
         ]
-      }
-    };
+      };
+    }
+    if (Object.keys(targets.DRAG).length > 1) {
+      questions.drag_source = {
+        type: "choice",
+        criteria: criteriaFor(targets.DRAG),
+        instructions: {
+          goal,
+          operation: "DRAG",
+          rules: [
+            NEXT_ACTION,
+            "Choose the element to drag FROM \u2014 the card, file, or handle that moves."
+          ]
+        }
+      };
+    }
   }
   const followUps = {
     NONE: "The next step can't be predicted confidently.",
@@ -1244,15 +1252,17 @@ async function chooseOnce(provider, state, goal, history, observations = []) {
   let target2 = null;
   if (operation in targets) {
     const pool = operation === "DRAG" ? dragDestinations : targets[operation];
-    const answer = answers[`${operation === "DOUBLE_CLICK" ? "click" : operation.toLowerCase()}_target`] ?? {};
-    validateChoice(answer, new Set(Object.keys(pool)));
+    const targetKeys = Object.keys(pool);
+    const answer = targetKeys.length === 1 ? { type: "choice", choice: targetKeys[0], confidence: 1, probabilities: { [targetKeys[0]]: 1 } } : answers[`${operation === "DOUBLE_CLICK" ? "click" : operation.toLowerCase()}_target`] ?? {};
+    validateChoice(answer, new Set(targetKeys));
     target = answer.choice;
     targetProbabilities = answer.probabilities;
     targetConfidence = answer.confidence;
     choice = pool[target].id;
     if (operation === "DRAG") {
-      const sourceAnswer = answers.drag_source ?? {};
-      validateChoice(sourceAnswer, new Set(Object.keys(targets.DRAG)));
+      const sourceKeys = Object.keys(targets.DRAG);
+      const sourceAnswer = sourceKeys.length === 1 ? { type: "choice", choice: sourceKeys[0], confidence: 1, probabilities: { [sourceKeys[0]]: 1 } } : answers.drag_source ?? {};
+      validateChoice(sourceAnswer, new Set(sourceKeys));
       target2 = choice;
       target = sourceAnswer.choice;
       choice = targets.DRAG[target].id;
@@ -1701,7 +1711,8 @@ function readBrowserPilotConfig() {
     },
     browser: {
       cdpUrl: process.env.BROWSER_PILOT_CDP_URL ?? process.env.JEV_CDP_URL,
-      allowFileUrls: process.env.BROWSER_PILOT_ALLOW_FILE_URLS === "1" || process.env.JEV_ALLOW_FILE_URLS === "1"
+      allowFileUrls: process.env.BROWSER_PILOT_ALLOW_FILE_URLS === "1" || process.env.JEV_ALLOW_FILE_URLS === "1",
+      headed: process.env.BROWSER_PILOT_HEADED === "1"
     }
   };
 }
@@ -2809,11 +2820,21 @@ function createListenerInit() {
 async function stopChrome(proc) {
   if (proc.pid === void 0 || proc.exitCode !== null || proc.signalCode !== null) return;
   await new Promise((resolve2) => {
-    const timer = setTimeout(() => proc.kill("SIGKILL"), 2e3);
-    proc.once("exit", () => {
-      clearTimeout(timer);
+    let fallback;
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(force);
+      if (fallback) clearTimeout(fallback);
+      proc.off("exit", finish);
       resolve2();
-    });
+    };
+    const force = setTimeout(() => {
+      proc.kill("SIGKILL");
+      fallback = setTimeout(finish, 1e3);
+    }, 2e3);
+    proc.once("exit", finish);
     proc.kill("SIGTERM");
   });
 }
@@ -3998,6 +4019,10 @@ var CdpBrowser = class _CdpBrowser {
       this.sessions.clear();
     } catch {
     }
+    if (this.proc) {
+      await this.socket?.call("Browser.close").catch(() => {
+      });
+    }
     this.socket?.close();
     if (this.proc) {
       try {
@@ -4576,7 +4601,7 @@ function parseInputs(value) {
   return Object.fromEntries(entries);
 }
 function parseArgs(argv) {
-  const args = { goals: [], engine: "cdp", headed: false };
+  const args = { goals: [], engine: "cdp", headed: process.env.BROWSER_PILOT_HEADED === "1" };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     const next = () => {
@@ -4609,6 +4634,9 @@ function parseArgs(argv) {
       case "--headed":
         args.headed = true;
         break;
+      case "--headless":
+        args.headed = false;
+        break;
       case "--cdp":
         args.cdpUrl = next();
         break;
@@ -4624,7 +4652,7 @@ function parseArgs(argv) {
   }
   if (!args.url || !args.goals.length || !["cdp", "agent-browser"].includes(args.engine)) {
     throw new Error(
-      "Usage: browser-pilot --url URL --goal GOAL [--goal ...] [--engine cdp|agent-browser] [--headed] [--cdp http://host:9222] [--max-steps N] [--inputs JSON] [--allow-file-urls] [--trace FILE] [--expect JSON] [--stop-at-challenge]"
+      "Usage: browser-pilot --url URL --goal GOAL [--goal ...] [--engine cdp|agent-browser] [--headed|--headless] [--cdp http://host:9222] [--max-steps N] [--inputs JSON] [--allow-file-urls] [--trace FILE] [--expect JSON] [--stop-at-challenge]"
     );
   }
   return args;
@@ -4758,7 +4786,7 @@ var PKG_VERSION = (() => {
     return "0.0.0";
   }
 })();
-var ALLOWED_ARGS = /* @__PURE__ */ new Set(["goal", "url", "engine", "max_steps", "expect", "stop_at_challenge", "inputs", "include_history"]);
+var ALLOWED_ARGS = /* @__PURE__ */ new Set(["goal", "url", "engine", "headed", "max_steps", "expect", "stop_at_challenge", "inputs", "include_history"]);
 var TOOL = {
   name: "browser_run",
   description: "Drive a real browser autonomously toward a bounded goal. A configured decision model selects browser operations and targets from structured page state, while Browser Pilot executes and verifies them. Prefer this over step-by-step browsing for a self-contained web task (search, filter, navigate, fill a form). The agent stops itself when done or blocked. There is no purchase/credential guardrail \u2014 scope goals accordingly and verify the outcome independently; the agent's DONE claim is not proof.",
@@ -4777,6 +4805,10 @@ var TOOL = {
         type: "string",
         enum: ["cdp", "agent-browser"],
         description: "Browser backend. cdp launches/attaches Chrome directly; agent-browser uses the agent-browser CLI session."
+      },
+      headed: {
+        type: "boolean",
+        description: "Show the browser window while the task runs. Overrides BROWSER_PILOT_HEADED for this call."
       },
       expect: {
         type: "object",
@@ -4842,13 +4874,17 @@ async function callBrowserRun(id, args) {
     respondError(id, -32602, "browser_run requires { goal: string, url: string }");
     return;
   }
+  if (args.headed !== void 0 && !isBoolean(args.headed)) {
+    respondError(id, -32602, "browser_run headed must be a boolean");
+    return;
+  }
   try {
     const result = await runOnce(
       {
         url: args.url,
         goals: [args.goal],
         engine: args.engine === "agent-browser" ? "agent-browser" : "cdp",
-        headed: false,
+        headed: isBoolean(args.headed) ? args.headed : process.env.BROWSER_PILOT_HEADED === "1",
         cdpUrl: process.env.BROWSER_PILOT_CDP_URL ?? process.env.JEV_CDP_URL,
         maxSteps: isFiniteNumber(args.max_steps) ? args.max_steps : void 0,
         expectation: args.expect === void 0 ? void 0 : parseExpectation(args.expect),

@@ -7,6 +7,10 @@ export function isJsonObject(value: JsonValue): value is JsonObject {
   return value !== null && value !== undefined && !Array.isArray(value) && value === Object(value);
 }
 
+export function isBoolean(value: JsonValue): value is boolean {
+  return value === true || value === false;
+}
+
 export const isString = (value: JsonValue): value is string => typeof value === "string";
 
 export const isFiniteNumber = (value: JsonValue): value is number => Number.isFinite(value);

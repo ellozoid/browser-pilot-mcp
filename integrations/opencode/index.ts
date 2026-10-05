@@ -23,6 +23,7 @@ interface BrowseRequest {
   goal: string;
   url: string;
   engine: "cdp" | "agent-browser";
+  headed?: boolean;
   maxSteps?: number;
   expectation?: BrowseExpectation;
   stopAtChallenge?: boolean;
@@ -75,6 +76,10 @@ function isObject(value: JsonValue): value is JsonObject {
 
 function isString(value: JsonValue): value is string {
   return typeof value === "string";
+}
+
+function isBoolean(value: JsonValue): value is boolean {
+  return value === true || value === false;
 }
 
 function isFiniteNumber(value: JsonValue): value is number {
@@ -160,7 +165,7 @@ function failureMessage(outcome: RunOutcome): string {
 function decodeRequest(value: JsonValue): BrowseRequest {
   if (!isObject(value)) throw new Error("browser_run requires { goal: string, url: string }");
 
-  const { goal, url, engine, max_steps, expect, stop_at_challenge, inputs } = value;
+  const { goal, url, engine, headed, max_steps, expect, stop_at_challenge, inputs } = value;
 
   if (!isString(goal) || !isString(url)) throw new Error("browser_run requires { goal: string, url: string }");
 
@@ -171,6 +176,8 @@ function decodeRequest(value: JsonValue): BrowseRequest {
   };
 
   if (isFiniteNumber(max_steps)) request.maxSteps = max_steps;
+
+  if (isBoolean(headed)) request.headed = headed;
 
   if (expect !== undefined) request.expectation = decodeExpectation(expect);
 
@@ -216,6 +223,10 @@ const plugin: HostPlugin = {
               description:
                 "Browser backend. cdp launches/attaches Chrome directly; agent-browser uses the agent-browser CLI session.",
             },
+            headed: {
+              type: "boolean",
+              description: "Show the browser window while the task runs.",
+            },
             expect: {
               type: "object",
               description: "Required completion evidence. Every supplied regex must match the terminal observation.",
@@ -249,6 +260,10 @@ const plugin: HostPlugin = {
           const request = decodeRequest(input);
 
           const args = ["--url", request.url, "--goal", request.goal, "--engine", request.engine];
+
+          if (request.headed === true) args.push("--headed");
+
+          if (request.headed === false) args.push("--headless");
 
           if (request.maxSteps !== undefined) args.push("--max-steps", String(request.maxSteps));
 

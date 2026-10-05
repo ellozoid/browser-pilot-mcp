@@ -61,6 +61,7 @@ export interface BrowserPilotConfig {
   browser: {
     cdpUrl?: string;
     allowFileUrls: boolean;
+    headed: boolean;
   };
 }
 
@@ -128,6 +129,7 @@ export function readBrowserPilotConfig(): BrowserPilotConfig {
     browser: {
       cdpUrl: process.env.BROWSER_PILOT_CDP_URL ?? process.env.JEV_CDP_URL,
       allowFileUrls: process.env.BROWSER_PILOT_ALLOW_FILE_URLS === "1" || process.env.JEV_ALLOW_FILE_URLS === "1",
+      headed: process.env.BROWSER_PILOT_HEADED === "1",
     },
   };
 }

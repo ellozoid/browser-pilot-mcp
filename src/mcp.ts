@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { parseExpectation } from "./completion.ts";
 import { runOnce } from "./cli.ts";
 import { loadDotEnv } from "./env.ts";
-import { isFiniteNumber, isJsonObject, isString } from "./json.ts";
+import { isBoolean, isFiniteNumber, isJsonObject, isString } from "./json.ts";
 import type { JsonObject, JsonValue } from "./types.ts";
 
 interface JsonRpcRequest {
@@ -34,7 +34,7 @@ const PKG_VERSION = (() => {
   }
 })();
 
-const ALLOWED_ARGS = new Set(["goal", "url", "engine", "max_steps", "expect", "stop_at_challenge", "inputs", "include_history"]);
+const ALLOWED_ARGS = new Set(["goal", "url", "engine", "headed", "max_steps", "expect", "stop_at_challenge", "inputs", "include_history"]);
 
 const TOOL = {
   name: "browser_run",
@@ -63,6 +63,10 @@ const TOOL = {
         enum: ["cdp", "agent-browser"],
         description:
           "Browser backend. cdp launches/attaches Chrome directly; agent-browser uses the agent-browser CLI session.",
+      },
+      headed: {
+        type: "boolean",
+        description: "Show the browser window while the task runs. Overrides BROWSER_PILOT_HEADED for this call.",
       },
       expect: {
         type: "object",
@@ -145,13 +149,19 @@ async function callBrowserRun(id: JsonValue, args: JsonObject): Promise<void> {
     return;
   }
 
+  if (args.headed !== undefined && !isBoolean(args.headed)) {
+    respondError(id, -32602, "browser_run headed must be a boolean");
+
+    return;
+  }
+
   try {
     const result = await runOnce(
       {
         url: args.url,
         goals: [args.goal],
         engine: args.engine === "agent-browser" ? "agent-browser" : "cdp",
-        headed: false,
+        headed: isBoolean(args.headed) ? args.headed : process.env.BROWSER_PILOT_HEADED === "1",
         cdpUrl: process.env.BROWSER_PILOT_CDP_URL ?? process.env.JEV_CDP_URL,
         maxSteps: isFiniteNumber(args.max_steps) ? args.max_steps : undefined,
         expectation: args.expect === undefined ? undefined : parseExpectation(args.expect),

@@ -5,8 +5,10 @@ import { DecisionProviderError } from "../src/decision/errors.ts";
 import { CloudflareDecisionProvider } from "../src/decision/providers/cloudflare.ts";
 import { SystemOneHttpProvider } from "../src/decision/providers/systemone-http.ts";
 import { TypeSafeDecisionProvider } from "../src/decision/providers/typesafe.ts";
-import type { DecisionRequest } from "../src/decision/types.ts";
+import type { DecisionProvider, DecisionRequest, DecisionResponse } from "../src/decision/types.ts";
 import { validateChoice } from "../src/decision/validate.ts";
+import { choose } from "../src/model/decide.ts";
+import type { PageState } from "../src/types.ts";
 
 const request = {
   state: { page: "settings" },
@@ -167,4 +169,71 @@ test("TypeSafe adapter owns SDK request translation", async () => {
   assert.equal(seenUrl, "https://decision.example/v1/systemone");
   assert.deepEqual(seenBody, { ...request, model: "jev-custom" });
   assert.equal(result.model, "jev-custom");
+});
+
+const singletonState: PageState = {
+  url: "https://example.test",
+  title: "Singleton targets",
+  w: 1280,
+  h: 720,
+  text: "Source Destination",
+  scroll: { y: 0, height: 720 },
+  actions: [
+    { id: "source", kind: "click", label: "Source", node: 1, draggable: true, contextMenu: true },
+    { id: "destination", kind: "click", label: "Destination", node: 2, dropZone: true },
+  ],
+  marker: null,
+  page_key: null,
+  guards: {},
+  omitted_actions: 0,
+  fingerprint: "singleton",
+};
+
+function choosingProvider(operation: string, inspect: (request: DecisionRequest) => void): DecisionProvider {
+  return {
+    id: "test",
+    model: "test-model",
+    capabilities: { choice: true, noul: true, score: true },
+    async decide<Q extends DecisionRequest["questions"]>(request: DecisionRequest<Q>): Promise<DecisionResponse<Q>> {
+      inspect(request);
+
+      const answers = Object.fromEntries(Object.entries(request.questions).map(([name, question]) => {
+        const keys = Object.keys(question.type === "choice" ? question.criteria : {});
+        const choice = name === "operation" ? operation : name === "drag_target" ? keys.at(-1)! : keys[0];
+
+        return [name, { type: "choice", choice, confidence: 1, probabilities: Object.fromEntries(keys.map(key => [key, key === choice ? 1 : 0])) }];
+      }));
+
+      return { model: "test-model", answers } as DecisionResponse<Q>;
+    },
+  };
+}
+
+test("singleton target questions are resolved without asking the provider", async () => {
+  const provider = choosingProvider("CONTEXT_CLICK", request => {
+    assert.equal(request.questions.context_click_target, undefined);
+    assert.equal(request.questions.drag_source, undefined);
+    assert.equal(Object.keys(request.questions.drag_target?.criteria ?? {}).length, 2);
+    assert.ok(Object.values(request.questions).every(question => question.type !== "choice" || Object.keys(question.criteria).length >= 2));
+  });
+
+  const decision = await choose(provider, singletonState, "Open the context menu", []);
+
+  assert.equal(decision.choice, "source");
+  assert.equal(decision.target, "1");
+  assert.equal(decision.target_confidence, 1);
+  assert.deepEqual(decision.target_probabilities, { "1": 1 });
+});
+
+test("singleton drag sources are resolved while destinations remain model-selected", async () => {
+  const provider = choosingProvider("DRAG", request => {
+    assert.equal(request.questions.drag_source, undefined);
+    assert.equal(Object.keys(request.questions.drag_target?.criteria ?? {}).length, 2);
+  });
+
+  const decision = await choose(provider, singletonState, "Drag Source onto Destination", []);
+
+  assert.equal(decision.choice, "source");
+  assert.equal(decision.target, "1");
+  assert.equal(decision.target2, "destination");
 });

@@ -103,7 +103,7 @@ function parseInputs(value: JsonValue): DeterministicInputs {
 }
 
 function parseArgs(argv: string[]): CliArgs {
-  const args: CliArgs = { goals: [], engine: "cdp", headed: false };
+  const args: CliArgs = { goals: [], engine: "cdp", headed: process.env.BROWSER_PILOT_HEADED === "1" };
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -141,6 +141,9 @@ function parseArgs(argv: string[]): CliArgs {
       case "--headed":
         args.headed = true;
         break;
+      case "--headless":
+        args.headed = false;
+        break;
       case "--cdp":
         args.cdpUrl = next();
         break;
@@ -157,7 +160,7 @@ function parseArgs(argv: string[]): CliArgs {
 
   if (!args.url || !args.goals.length || !["cdp", "agent-browser"].includes(args.engine)) {
     throw new Error(
-      "Usage: browser-pilot --url URL --goal GOAL [--goal ...] [--engine cdp|agent-browser] [--headed] [--cdp http://host:9222] [--max-steps N] [--inputs JSON] [--allow-file-urls] [--trace FILE] [--expect JSON] [--stop-at-challenge]",
+      "Usage: browser-pilot --url URL --goal GOAL [--goal ...] [--engine cdp|agent-browser] [--headed|--headless] [--cdp http://host:9222] [--max-steps N] [--inputs JSON] [--allow-file-urls] [--trace FILE] [--expect JSON] [--stop-at-challenge]",
     );
   }
 

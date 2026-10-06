@@ -4789,7 +4789,7 @@ var PKG_VERSION = (() => {
 var ALLOWED_ARGS = /* @__PURE__ */ new Set(["goal", "url", "engine", "headed", "max_steps", "expect", "stop_at_challenge", "inputs", "include_history"]);
 var TOOL = {
   name: "browser_run",
-  description: "Drive a real browser autonomously toward a bounded goal. A configured decision model selects browser operations and targets from structured page state, while Browser Pilot executes and verifies them. Prefer this over step-by-step browsing for a self-contained web task (search, filter, navigate, fill a form). The agent stops itself when done or blocked. There is no purchase/credential guardrail \u2014 scope goals accordingly and verify the outcome independently; the agent's DONE claim is not proof.",
+  description: "Drive a real browser autonomously toward a bounded goal. A configured decision model selects browser operations and targets from structured page state, while Browser Pilot executes and verifies them. Prefer this over step-by-step browsing for a self-contained web task (search, filter, navigate, fill a form). When a persistent CDP browser is configured, omit engine so Browser Pilot reuses its existing window, writable profile, cookies, and signed-in session. Select agent-browser only when the user explicitly requests that backend. The agent stops itself when done or blocked. There is no purchase/credential guardrail \u2014 scope goals accordingly and verify the outcome independently; the agent's DONE claim is not proof.",
   inputSchema: {
     type: "object",
     properties: {
@@ -4804,11 +4804,11 @@ var TOOL = {
       engine: {
         type: "string",
         enum: ["cdp", "agent-browser"],
-        description: "Browser backend. cdp launches/attaches Chrome directly; agent-browser uses the agent-browser CLI session."
+        description: "Browser backend. Omit this to use cdp, including any configured persistent CDP browser. Select agent-browser only when the user explicitly requests it."
       },
       headed: {
         type: "boolean",
-        description: "Show the browser window while the task runs. Overrides BROWSER_PILOT_HEADED for this call."
+        description: "Show a browser launched for this task. A configured persistent CDP browser keeps its existing visible window. Overrides BROWSER_PILOT_HEADED for this call."
       },
       expect: {
         type: "object",
